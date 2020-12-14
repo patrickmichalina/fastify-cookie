@@ -5,8 +5,14 @@ const cookie = require('cookie')
 
 const signerFactory = require('./signer')
 
-function fastifyCookieSetCookie (reply, name, value, options, signer) {
+function fastifyCookieSetCookie (reply, name, value, options, signer, filter) {
   const opts = Object.assign({}, options || {})
+
+  if (typeof filter === 'function' && filter(reply, name, value, opts)) {
+    reply.removeHeader('Set-Cookie')
+    return reply
+  }
+
   if (opts.expires && Number.isInteger(opts.expires)) {
     opts.expires = new Date(opts.expires)
   }
@@ -50,6 +56,7 @@ function onReqHandlerWrapper (fastify) {
 
 function plugin (fastify, options, next) {
   const secret = options.secret || ''
+  const filter = options ? options.filter : undefined
 
   const signer = typeof secret === 'string' ? signerFactory(secret) : secret
 
@@ -58,7 +65,7 @@ function plugin (fastify, options, next) {
   })
   fastify.decorateRequest('cookies', null)
   fastify.decorateReply('setCookie', function setCookieWrapper (name, value, options) {
-    return fastifyCookieSetCookie(this, name, value, options, signer)
+    return fastifyCookieSetCookie(this, name, value, options, signer, filter)
   })
   fastify.decorateReply('clearCookie', function clearCookieWrapper (name, options) {
     return fastifyCookieClearCookie(this, name, options)
